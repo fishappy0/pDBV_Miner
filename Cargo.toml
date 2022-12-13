@@ -1,0 +1,12 @@
+[package]
+name = "parallel"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bitvec = "1.0.1"
+csv = "1.1"
+rctree = "0.5.0"
+plotlib = "0.5.1"
