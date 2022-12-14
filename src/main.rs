@@ -1,6 +1,8 @@
 use plotlib;
 use plotlib::view::ContinuousView;
 use plotlib::view::View;
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert;
 use std::fs;
@@ -8,10 +10,12 @@ use std::fs;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
+use std::rc::Rc;
 use std::time::Instant;
 
 use crate::types::Node;
 use crate::types::Tree;
+use crate::utils::get_frequent_itemsets;
 use bitvec::prelude::*;
 mod types;
 mod utils;
@@ -23,7 +27,7 @@ fn main() {
         String::from("4: AD B CA D"),
     ];
 
-    // parse csv
+    // // parse csv
     // let csv_data = std::fs::read_to_string("resources/transactional_T10I4D100K.csv").unwrap();
     // let mut test_data = Vec::new();
     // let mut count = 1;
@@ -38,7 +42,8 @@ fn main() {
     let mut time_vec = Vec::new();
     let mut support_vec = Vec::new();
 
-    for i in 1..2 {
+    for i in 1..5 {
+        println!("Run: {i}");
         let start = Instant::now();
 
         // Extracting TIDset and Itemset from tput data
@@ -49,7 +54,6 @@ fn main() {
 
         // Converting the traditional root node list to a Dynamic Bit Vector data type
         let dbv = utils::convert_to_dbvec(convert);
-        let elapsed = start.elapsed();
 
         // let mut tree = BTreeMap::new();
 
@@ -74,21 +78,30 @@ fn main() {
             root: Node {
                 item: Some(root_node),
                 children: vec![],
+                has_iterated: false,
             },
             // closed_sets: std::collections::HashSet::new(),
         };
 
         dbv.iter().for_each(|node| {
-            let current_node = custom_tree.root;
+            let current_node = &mut custom_tree.root;
             let mut node_item = HashMap::new();
             node_item.insert(node.0.to_owned(), node.1.to_owned());
             iter_array.push(node_item.clone());
             let new_node = Node {
                 item: Some(node_item),
                 children: vec![],
+                has_iterated: false,
             };
             current_node.children.push(new_node);
         });
+        print!("{:#?}", get_frequent_itemsets(&mut custom_tree.root, 100));
+        let elapsed = start.elapsed();
+        // custom_tree.root.children.borrow_mut().iter().for_each(|v| {
+        //     println!("{v:#?}");
+        // });
+        // print!("{:#?}", custom_tree.root.children.borrow_mut());
+        // print!("{:#?}", get_frequent_itemsets(, min_sup));
 
         // generate frequent itemsets
 
@@ -133,25 +146,25 @@ fn main() {
         //     });
         //     println!();
         // });
-        time_vec.push(elapsed.as_millis() as f64);
+        time_vec.push(elapsed.as_micros() as f64);
         support_vec.push(i as f64 / 10.0);
     }
-
-    // let plot_vec: Vec<(f64, f64)> = support_vec
-    //     .iter()
-    //     .zip(time_vec.iter())
-    //     .map(|(x, y)| (*x, *y))
-    //     .collect();
-    // let graph = plotlib::repr::Plot {
-    //     data: plot_vec,
-    //     line_style: Some(plotlib::style::LineStyle::new().colour("blue")),
-    //     point_style: Some(plotlib::style::PointStyle::new().colour("red")),
-    //     legend: Some("".to_owned()),
-    // };
-    // let mut view = ContinuousView::new().add(graph);
-    // view.add_grid(plotlib::grid::Grid::new(3, 8));
-    // let page = plotlib::page::Page::single(&view);
-    // page.save("plot.svg").unwrap();
+    support_vec.reverse();
+    let plot_vec: Vec<(f64, f64)> = support_vec
+        .iter()
+        .zip(time_vec.iter())
+        .map(|(x, y)| (*x, *y))
+        .collect();
+    let graph = plotlib::repr::Plot {
+        data: plot_vec,
+        line_style: Some(plotlib::style::LineStyle::new().colour("blue")),
+        point_style: Some(plotlib::style::PointStyle::new().colour("red")),
+        legend: Some("".to_owned()),
+    };
+    let mut view = ContinuousView::new().add(graph);
+    view.add_grid(plotlib::grid::Grid::new(50, 10));
+    let page = plotlib::page::Page::single(&view);
+    page.save("plot.svg").unwrap();
     // page.to_svg();
     // plotlib::repr::Plot::new(plot_vec);
     // println!("{print:?}");

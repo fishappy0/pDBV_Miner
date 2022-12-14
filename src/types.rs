@@ -8,26 +8,23 @@ use std::{
 // pub trait ItemType: Eq + Clone + Debug + Send + Sync {}
 // impl<T> ItemType for T where T: Eq + Clone + Debug + Send + Sync {}
 
-type RcNode<T> = Rc<Node<T>>;
-type WeakRcNode<T> = Weak<Node<T>>;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tree<T> {
     pub(crate) root: Node<T>,
     // pub(crate) closed_sets: HashSet<T>,
 }
 
 /// `Node<T>` represents the single node in a tree.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node<T> {
     pub(crate) item: Option<T>,
     pub(crate) children: Vec<Node<T>>,
-    // Use Weak reference here to prevent the reference cycle.
+    pub(crate) has_iterated: bool,
     // parent: RefCell<WeakRcNode<T>>,
     // The node's neighbor is the one with the same value that is "to the right"
     // of it in the tree.
     // neighbor_node: RefCell<RcNode<T>>,
 }
-
 // impl<T: ItemType> Node<T> {
 //     pub fn new(item: Option<T>) -> Self {
 //         Node {

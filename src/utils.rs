@@ -1,5 +1,5 @@
 use bitvec::prelude::*;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::types::Node;
 
@@ -121,41 +121,91 @@ pub fn convert_to_dbvec(
     dbvec
 }
 pub fn get_frequent_itemsets(
-    node_param: Node<HashMap<String, HashMap<i32, BitVec>>>,
+    node_param: &mut Node<HashMap<String, HashMap<i32, BitVec>>>,
     min_sup: usize,
-) {
-    let mut node_list: Vec<Node<HashMap<String, HashMap<i32, BitVec>>>> = node_param.children;
-    for f_node in node_list {
-        for s_node in node_list {
-            let merged_node = merge_nodes(f_node, s_node);
-            if merged_node
-                .item
-                .iter()
-                .next()
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap()
-                .1
-                .iter()
-                .next()
-                .unwrap()
-                .1
-                .len()
-                >= min_sup
-            {
-                node_param.children.push(merged_node);
-            }
+) -> Vec<Node<HashMap<String, HashMap<i32, BitVec>>>> {
+    // let arr_len = node_param.item.as_ref().unwrap().len();
+    // let mut closed_items = Vec::new();
+    // for i in 0..(arr_len - 1) {
+    //     let mut f_node = node_param.get(i).unwrap().to_owned();
+    //     let cloned_children = node_param.children.clone();
+    //     for j in 0..(arr_len - 1) {
+    //         let s_node = cloned_children.get(j).unwrap();
+    //         if s_node.has_iterated == false {
+    //             let merged_node = merge_nodes(&f_node, s_node);
+    //             if dbg!(merged_node
+    //                 .item
+    //                 .as_ref()
+    //                 .unwrap()
+    //                 .iter()
+    //                 .next()
+    //                 .unwrap()
+    //                 .1
+    //                 .iter()
+    //                 .next()
+    //                 .unwrap()
+    //                 .1
+    //                 .count_ones())
+    //                 >= min_sup
+    //             {
+    //                 f_node.children.push(merged_node);
+    //             }
+    //         }
+    //     }
+    //     closed_items.append(&mut get_frequent_itemsets(&mut f_node, min_sup));
+    //     if f_node.children.len() == 0 {
+    //         // let f_node_cloned = f_node.clone();
+    //         // closed_items.push(f_node_cloned);
+    //         f_node.has_iterated = true;
+    //     }
+    // }
+    // closed_items
+    let mut closed_items = Vec::new();
+    let children_list = &mut node_param.children.clone();
+    children_list.iter_mut().for_each(|f_node| {
+        node_param
+            .children
+            .iter()
+            // .borrow()
+            // .iter()
+            .for_each(|s_node| {
+                if s_node.has_iterated == false {
+                    let merged_node = merge_nodes(f_node, s_node);
+                    if merged_node
+                        .item
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .next()
+                        .unwrap()
+                        .1
+                        .iter()
+                        .next()
+                        .unwrap()
+                        .1
+                        .len()
+                        >= min_sup
+                    {
+                        f_node.children.push(merged_node);
+                    }
+                }
+            });
+        closed_items.append(get_frequent_itemsets(f_node, min_sup).as_mut());
+        if &f_node.children.len() == &0 {
+            f_node.has_iterated = true;
+            closed_items.push(f_node.clone());
         }
-    }
+    });
+    closed_items
 }
+
 fn merge_nodes(
-    dbv_2: Node<HashMap<String, HashMap<i32, BitVec>>>,
-    dbv_1: Node<HashMap<String, HashMap<i32, BitVec>>>,
+    dbv_2: &Node<HashMap<String, HashMap<i32, BitVec>>>,
+    dbv_1: &Node<HashMap<String, HashMap<i32, BitVec>>>,
 ) -> Node<HashMap<String, HashMap<i32, BitVec>>> {
     // Reading stuff
-    let dbv_1_content = dbv_1.item.unwrap().into_iter().next().unwrap();
-    let dbv_2_content = dbv_2.item.unwrap().into_iter().next().unwrap();
+    let dbv_1_content = dbv_1.item.as_ref().unwrap().into_iter().next().unwrap();
+    let dbv_2_content = dbv_2.item.as_ref().unwrap().into_iter().next().unwrap();
     let node_name = dbv_1_content.0.to_string()
         + ":"
         + dbv_2_content
@@ -165,16 +215,17 @@ fn merge_nodes(
             .last()
             .unwrap();
 
-    let dbv_1_start = dbv_1_content.1.into_iter().next().unwrap().0;
+    let dbv_1_start = dbv_1_content.1.clone().into_iter().next().unwrap().0;
     let dbv_1_bitvec = dbv_1_content.1.into_iter().next().unwrap().1;
 
-    let dbv_2_start = dbv_2_content.1.into_iter().next().unwrap().0;
+    let dbv_2_start = dbv_2_content.1.clone().into_iter().next().unwrap().0;
     let dbv_2_bitvec = dbv_2_content.1.into_iter().next().unwrap().1;
 
     // Assigning stuff and checking stuff
+    let mut final_pos = std::cmp::max(dbv_1_start, dbv_2_start);
     let mut i = 0;
     let mut j = 0;
-    if (dbv_1_start < dbv_2_start) {
+    if dbv_1_start < dbv_2_start {
         i = dbv_2_start - dbv_1_start;
         j = 0;
 
@@ -183,13 +234,14 @@ fn merge_nodes(
         //  start_1 = 40, dbv_1 = [1,1,0,0]
         //  start_2 = 50, dbv_2 = [1,1,0,0]
         if dbv_1_start + (dbv_1_bitvec.len() as i32) < dbv_2_start {
-            let return_item = HashMap::new();
-            let return_dbv = HashMap::new();
+            let mut return_item = HashMap::new();
+            let mut return_dbv = HashMap::new();
             return_dbv.insert(0, BitVec::new());
             return_item.insert(node_name, return_dbv);
             return Node {
                 item: Some(return_item.clone()),
-                children: vec![],
+                children: Vec::new(),
+                has_iterated: false,
             };
         }
     } else {
@@ -198,16 +250,51 @@ fn merge_nodes(
 
         // Another case of no overlap
         if dbv_2_start + (dbv_2_bitvec.len() as i32) < dbv_1_start {
-            let return_item = HashMap::new();
-            let return_dbv = HashMap::new();
+            let mut return_item = HashMap::new();
+            let mut return_dbv = HashMap::new();
             return_dbv.insert(0, BitVec::new());
             return_item.insert(node_name, return_dbv);
             return Node {
                 item: Some(return_item.clone()),
                 children: vec![],
+                has_iterated: false,
             };
         }
     };
+    let mut count = 0;
+    if dbv_1_start + (dbv_1_bitvec.len() as i32) < dbv_2_start + (dbv_2_bitvec.len() as i32) {
+        count = dbv_1_bitvec.len();
+    } else if dbv_1_start + (dbv_1_bitvec.len() as i32) > dbv_2_start + (dbv_2_bitvec.len() as i32)
+    {
+        count = dbv_2_bitvec.len();
+    } else {
+        count = if dbv_1_bitvec.len() < dbv_2_bitvec.len() {
+            dbv_1_bitvec.len()
+        } else {
+            dbv_2_bitvec.len()
+        };
+    };
+    let mut return_bitvec = BitVec::new();
+    while count - 1 > 0 {
+        if dbv_1_bitvec[i as usize] && dbv_2_bitvec[j as usize] {
+            return_bitvec.push(true);
+        } else {
+            return_bitvec.push(false);
+        }
+        i += 1;
+        j += 1;
+        final_pos += 1;
+        count -= 1;
+    }
+    let mut return_dbv = HashMap::new();
+    return_dbv.insert(final_pos, return_bitvec);
+    let mut return_item = HashMap::new();
+    return_item.insert(node_name, return_dbv);
+    Node {
+        item: Some(return_item),
+        children: vec![],
+        has_iterated: false,
+    }
 }
 
 //     let mut f_len = 0;
